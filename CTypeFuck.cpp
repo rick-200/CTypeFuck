@@ -25,6 +25,7 @@ class NormalType : public Type {
 
  public:
   NormalType(const std::string& s) : _s(s) {}
+  NormalType(std::string&& s) : _s(std::move(s)) {}
   virtual std::string GetDef(const std::string& name) const override {
     std::string ret = _s;
     if (!name.empty()) ret.append(" ").append(name);
@@ -43,13 +44,14 @@ class NormalPointerType : public Type {
     assert(_inner->GetID() != TypeID::FuncPointer);
   }
   virtual std::string GetDef(const std::string& name) const override {
-    if (_inner->GetID() == TypeID::FuncPointer) {
-      std::string s = "*";
-      if (_const) s.append("const ");
-      if (_volatile) s.append("volatile ");
-      s.append(name);
-      return _inner->GetDef(s);
-    }
+    assert(_inner->GetID() != TypeID::FuncPointer);
+    //if (_inner->GetID() == TypeID::FuncPointer) {
+    //  std::string s = "*";
+    //  if (_const) s.append("const ");
+    //  if (_volatile) s.append("volatile ");
+    //  s.append(name);
+    //  return _inner->GetDef(s);
+    //}
     std::string ret = _inner->GetDef("").append("*");
     if (_const) ret.append(" const");
     if (_volatile) ret.append(" volatile");
@@ -82,19 +84,23 @@ class FuncPointer : public Type {
                        const std::string& name) const {
     assert(!name.empty());
     if (_ret->GetID() == TypeID::FuncPointer)
-      return static_cast<FuncPointer*>(_ret.get())->AsReturn(this, name);
+      return static_cast<FuncPointer*>(_ret.get())
+          ->AsReturn(this, GetDefWithoutReturnType(name));
     return _ret->GetDef("").append(
         GetDefWithoutReturnType(outer->GetDefWithoutReturnType(name)));
   }
   virtual std::string GetDef(const std::string& name) const override {
     assert(!name.empty());
     if (_ret->GetID() == TypeID::FuncPointer)
-      return static_cast<FuncPointer*>(_ret.get())->AsReturn(this, name);
+      return static_cast<FuncPointer*>(_ret.get())
+          ->AsReturn(this, GetDefWithoutReturnType(name));
     return _ret->GetDef("").append(GetDefWithoutReturnType(name));
   }
   virtual TypeID GetID() const override { return TypeID::FuncPointer; }
 };
 std::unique_ptr<NormalType> generate_normal_type() {
+  static int x = 0;
+  //printf("%d\n", ++x);
   const char* type_s[] = {"char",
                           "short",
                           "int",
@@ -109,9 +115,9 @@ std::unique_ptr<NormalType> generate_normal_type() {
                           "double",
                           "long double"};
   std::string s = type_s[random(0, sizeof(type_s) / sizeof(void*) - 1)];
-  if (random(0.3)) s += " const";
-  if (random(0.3)) s += " volatile";
-  return std::make_unique<NormalType>(s);
+  if (random(0.3)) s.append(" const");
+  if (random(0.3)) s.append(" volatile");
+  return std::make_unique<NormalType>(std::move(s));
 }
 std::unique_ptr<Type> _generate_type(int dep, int dep_max);
 std::unique_ptr<Type> _generate_type_not_funcptr(int dep, int dep_max);
@@ -130,6 +136,7 @@ std::unique_ptr<FuncPointer> generate_func_pointer_type(int dep, int dep_max) {
                                        std::move(params));
 }
 std::unique_ptr<Type> _generate_type_not_funcptr(int dep, int dep_max) {
+  assert(dep <= dep_max);
   if (dep >= dep_max) return generate_normal_type();
   switch (random(0, 1)) {
     case 0:
@@ -139,8 +146,9 @@ std::unique_ptr<Type> _generate_type_not_funcptr(int dep, int dep_max) {
   }
 }
 std::unique_ptr<Type> _generate_type(int dep, int dep_max) {
+  assert(dep <= dep_max);
   if (dep >= dep_max) return generate_normal_type();
-  if (random(0.8)) return generate_func_pointer_type(dep, dep_max);
+  if (random(1)) return generate_func_pointer_type(dep, dep_max);
   switch (random(0, 1)) {
     case 0:
       return generate_normal_type();
